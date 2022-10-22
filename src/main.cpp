@@ -15,6 +15,7 @@ const char* mqttUser = SECRET_MQTT_USER;
 const char* mqttPass = SECRET_MQTT_PASS;
 
 String mqttClientId = "iot-GasReed";
+const int capacity = JSON_OBJECT_SIZE(1);
 
 const unsigned int reedPin = 13; // D7
 const unsigned int ledPin = 12; // D6
@@ -45,7 +46,6 @@ void initWifi(){  // Start WiFi-Connection
 }
 
 void publish(int count) {
-  const int capacity = JSON_OBJECT_SIZE(1);
   StaticJsonDocument<capacity> doc;
   doc["count"] = count;
   char out[128];
@@ -56,11 +56,39 @@ void publish(int count) {
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
+    if (!client.connect(mqttClientId.c_str(), mqttUser, mqttPass)) {
+      delay(500);
+    }
+  }
+}
+
+void initialConnectAndSub() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
     if (client.connect(mqttClientId.c_str(), mqttUser, mqttPass)) {
-      // Serial.println("connected");
+      client.subscribe("test/gasmeter/accumulated");
     } else {
       delay(500);
     }
+  }
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  if (strcmp(topic,"test/gasmeter/accumulated")==0) {
+    String meterCountStr;
+    StaticJsonDocument<capacity> doc;
+    Serial.print("Message arrived [");
+    Serial.print(topic);
+    Serial.print("] ");
+    for (int i=0;i<length;i++) {
+      meterCountStr += (char)payload[i];
+      Serial.print((char)payload[i]);
+    }
+    Serial.println();
+    deserializeJson(doc, meterCountStr);
+    meterCount = doc["count"];
+    client.unsubscribe("test/gasmeter/accumulated");
+    Serial.printf("Set initial value of meterCount to %d.\n", meterCount);
   }
 }
 
@@ -68,8 +96,11 @@ void setup() {
   Serial.begin(115200);
   initWifi();
   client.setServer(mqttServer, mqttPort);
+  client.setCallback(callback);
   Serial.print("RSSI: ");
   Serial.println(WiFi.RSSI());
+
+  initialConnectAndSub();
 
   pinMode(reedPin, INPUT);
   pinMode(ledPin, OUTPUT);
@@ -81,6 +112,8 @@ void loop() {
   if (!client.connected()) {
     reconnect();
   }
+  client.loop();
+
   int reading = digitalRead(reedPin);
   if (reading != lastReedState) {
     // reset the debouncing timer
