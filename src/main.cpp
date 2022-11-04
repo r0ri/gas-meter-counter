@@ -16,6 +16,8 @@ const char* mqttPass = SECRET_MQTT_PASS;
 
 String mqttClientId = "iot-GasReed";
 const int capacity = JSON_OBJECT_SIZE(1);
+#define MSG_BUFFER_SIZE	(128)
+char out[MSG_BUFFER_SIZE];
 
 const unsigned int reedPin = 13; // D7
 const unsigned int ledPin = 12; // D6
@@ -48,9 +50,8 @@ void initWifi(){  // Start WiFi-Connection
 void publish(int count) {
   StaticJsonDocument<capacity> doc;
   doc["count"] = count;
-  char out[128];
   serializeJson(doc, out);
-  client.publish("test/gasmeter/accumulated", out, true);
+  client.publish("gas-meter/accumulated", out, true);
 }
 
 void reconnect() {
@@ -66,7 +67,7 @@ void initialConnectAndSub() {
   // Loop until we're reconnected
   while (!client.connected()) {
     if (client.connect(mqttClientId.c_str(), mqttUser, mqttPass)) {
-      client.subscribe("test/gasmeter/accumulated");
+      client.subscribe("gas-meter/accumulated");
     } else {
       delay(500);
     }
@@ -74,7 +75,7 @@ void initialConnectAndSub() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  if (strcmp(topic,"test/gasmeter/accumulated")==0) {
+  if (strcmp(topic,"gas-meter/accumulated")==0) {
     String meterCountStr;
     StaticJsonDocument<capacity> doc;
     Serial.print("Message arrived [");
@@ -87,7 +88,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println();
     deserializeJson(doc, meterCountStr);
     meterCount = doc["count"];
-    client.unsubscribe("test/gasmeter/accumulated");
+    client.unsubscribe("gas-meter/accumulated");
     Serial.printf("Set initial value of meterCount to %d.\n", meterCount);
   }
 }
@@ -133,8 +134,7 @@ void loop() {
         meterCount++;
         // Serial.printf("Counter: %d \n", meterCount);
         publish(meterCount);
-        // client.publish("test/gasmeter/accumulated", String(meterCount).c_str(), true);
-        int publishResult = client.publish("test/gasmeter/pulse", String(1).c_str());
+        int publishResult = client.publish("gas-meter/pulse", String(1).c_str());
         if (!publishResult) {
           Serial.println("Publish to MQTT failed");
         }
